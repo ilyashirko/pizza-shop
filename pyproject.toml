@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "pizza-shop"
+version = "0.1.0"
+description = ""
+authors = ["ilyashirko <ilyashirko@gmail.com>"]
+readme = "README.md"
+packages = [{include = "pizza_shop"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+transliterate = "^1.10.2"
+requests = "^2.28.1"
+redis = "^4.4.1"
+environs = "^9.5.0"
+tqdm = "^4.64.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
