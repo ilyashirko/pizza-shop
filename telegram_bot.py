@@ -12,7 +12,7 @@ from more_itertools import chunked
 
 import requests
 
-from geopy import distance
+from geopy import distance as geopy_distance
 from telegram import (
     Update,
     InlineKeyboardMarkup,
@@ -377,8 +377,9 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
         return 'WAITING_GEO'
     flow_meta = motlin_api.get_flow(flow_id=os.getenv('FLOW_ID'))
     pizzerias = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
+    
     for pizzeria in pizzerias:
-        pizzeria.update({'distance': distance.distance(
+        pizzeria.update({'distance': geopy_distance.distance(
             customer_coords,
             (pizzeria['longitude'], pizzeria['latitude'])
         ).km})
