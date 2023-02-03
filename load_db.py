@@ -81,9 +81,6 @@ def create_parser():
         type=str,
         help=f'Название нового прайс-листа'
     )
-
-
-
     parser.add_argument(
         '--addresses',
         type=str,
@@ -103,6 +100,21 @@ def create_parser():
         '--flow_id',
         type=str,
         help=f'ID группы офисов / точек продаж'
+    )
+    parser.add_argument(
+        '--new_field_name',
+        type=str,
+        help=f'Название нового поля'
+    )
+    parser.add_argument(
+        '--new_field_type',
+        type=str,
+        help=f'Тип нового поля'
+    )
+    parser.add_argument(
+        '--default_value',
+        type=str,
+        help=f'Значение по умолчанию'
     )
     return parser
 
@@ -148,14 +160,10 @@ if __name__ == '__main__':
     menu_filepath = args.menu
     addresses_filepath = args.addresses
     
-    if not menu_filepath and not addresses_filepath:
-        sys.stdout.write('Enter menu or addresses file!\n')
+    if not menu_filepath and not addresses_filepath and not args.new_field_name:
+        sys.stdout.write('Enter menu, addresses or new field meta !\n')
         sys.exit(os.EX_USAGE)
     
-    if addresses_filepath and not (args.flow_id or args.flow_name):
-        sys.stdout.write('If you dont enter flow_id - you should enter new unique flow name (-fn)!\n')
-        sys.exit(os.EX_USAGE)
-
     if menu_filepath:
         menu = get_file_content(filepath=menu_filepath)
 
@@ -262,7 +270,11 @@ if __name__ == '__main__':
 
     if addresses_filepath:
         addresses = get_file_content(filepath=addresses_filepath)
-        flow_id = args.flow_id
+        flow_id = args.flow_id or os.getenv('FLOW_ID', None)
+        if addresses_filepath and not (flow_id or args.new_flow_name):
+            sys.stdout.write('If you dont enter flow_id - you should enter new unique flow name!\n')
+            sys.exit(os.EX_USAGE)
+        
         if not flow_id:
             flow_name = args.new_flow_name
             flow_description = args.new_flow_description or ''
@@ -272,6 +284,8 @@ if __name__ == '__main__':
                 slug=make_slug(flow_name)
             )
             flow_id = flow_meta['data']['id']
+            with open('.env', 'a') as env_file:
+                env_file.write(f'\nFLOW_ID={flow_id}')
         else:
             flow_meta = motlin_api.get_flow(flow_id=flow_id)
         
@@ -302,3 +316,41 @@ if __name__ == '__main__':
                 longitude=float(address['coordinates']['lon']),
                 latitude=float(address['coordinates']['lat'])
             )
+
+    if args.new_field_name:
+        new_field_name = args.new_field_name
+        default_value = args.default_value
+        new_field_type = args.new_field_type
+        flow_id = os.getenv('FLOW_ID') or args.flow_id
+        
+        if not (new_field_name and new_field_type and default_value and flow_id):
+            sys.stdout.write('Enter new field params a!\n')
+            sys.exit(os.EX_USAGE)
+        if new_field_type.lower() not in ('string', 'integer', 'boolean', 'float', 'date', 'relationship'):
+            sys.stdout.write('Incorrect field type!\n')
+            sys.exit(os.EX_USAGE)
+        new_field_slug = make_slug(new_field_name)
+        try:
+            motlin_api.create_field(
+                name=new_field_name,
+                slug=new_field_slug,
+                field_type=new_field_type.lower(),
+                description='',
+                flow_id=flow_id
+            )
+        except requests.exceptions.HTTPError as error:
+            pass
+        flow_meta = motlin_api.get_flow(flow_id=os.getenv('FLOW_ID'))
+        entries = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
+        assert flow_id == 'a201aae8-5e06-41fc-a001-d72f6aac0cc9'
+        for entry in tqdm(entries, desc='adding field value'):
+            try:
+                motlin_api.update_entry(
+                    flow_slug=flow_meta['data']['slug'],
+                    entry_id=entry['id'],
+                    field_slug=new_field_slug,
+                    field_value=default_value
+                )
+            except requests.exceptions.HTTPError as error:
+                sys.stdout.write(json.dumps(error.response.json(), indent=4))
+                sys.exit(os.EX_IOERR)

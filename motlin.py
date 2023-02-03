@@ -307,17 +307,17 @@ class Motlin:
         headers = {
             "Authorization": f"Bearer {self.token}"
         }
-        entities = list()
+        entries = list()
         while True:
             response = requests.get(url, headers=headers)
             response.raise_for_status()
-            entities_meta = response.json()
-            entities += entities_meta['data']
-            if not entities_meta['data'] or not entities_meta['links']['next']:
+            entries_meta = response.json()
+            entries += entries_meta['data']
+            if not entries_meta['data'] or not entries_meta['links']['next']:
                 break
             else:
-                url = entities_meta['links']['next']
-        return entities
+                url = entries_meta['links']['next']
+        return entries
         
     @_refresh_token_if_expired
     def create_entry(self,
@@ -343,6 +343,28 @@ class Motlin:
         response.raise_for_status()
         return response.json()
     
+    @_refresh_token_if_expired
+    def update_entry(self,
+                     flow_slug: str,
+                     entry_id: str,
+                     field_slug: str,
+                     field_value: str):
+        url = f'https://api.moltin.com/v2/flows/{flow_slug}/entries/{entry_id}'
+        headers = {
+            "Authorization": f"Bearer {self.token}"
+        }
+        request_data = {
+            "data": {
+                "type": "entry",
+                "id": entry_id,
+                field_slug: field_value,
+            }
+        }
+        response = requests.put(url, headers=headers, json=request_data)
+        response.raise_for_status()
+        return response.json()
+
+
     @_refresh_token_if_expired
     def get_products(self):
         url = 'https://api.moltin.com/pcm/products'

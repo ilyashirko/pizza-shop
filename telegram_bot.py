@@ -12,6 +12,7 @@ from more_itertools import chunked
 
 import requests
 
+from geopy import distance
 from telegram import (
     Update,
     InlineKeyboardMarkup,
@@ -337,35 +338,118 @@ def enter_email(motlin_api: Motlin, update: Update, context: CallbackContext) ->
             pass
     context.bot.send_message(
         update.effective_chat.id,
-        'Ваш заказ оформлен!'
+        dedent(
+            '''
+            Ваш заказ оформлен!
+            Займемся вопросом доставки.
+            Введите адрес доставки, координаты или отправьте свою геопозицию.
+            Либо нажмите "заберу сам" если нужен самовывоз
+            '''
+        ),
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+        ]])
     )
     motlin_api.redis.delete(f'{update.effective_chat.id}_cart_id')
     motlin_api.redis.delete(f'{update.effective_chat.id}_cart_expires')
-    return display_products(motlin_api, update, context)
+    return 'WAITING_GEO'
 
 
-def enter_location(update: Update, context: CallbackContext) -> str:
+def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
     if update.message.location:
-        longitude, latitude = update.message.location.longitude, update.message.location.latitude
+        customer_coords = update.message.location.longitude, update.message.location.latitude
     elif re.match(r'[?-]+[0-9]+[.|,]+[0-9]+[ ]+[?-]+[0-9]+[.|,]+[0-9]+', update.message.text):
         input_coordinates = '.'.join(update.message.text.split(','))
-        longitude, latitude = [float(coord) for coord in input_coordinates.split()]
+        customer_coords = tuple(float(coord) for coord in input_coordinates.split())
     else:
-        longitude, latitude = fetch_coordinates(os.getenv('YANDEX_GEO_API_KEY'), update.message.text)
+        customer_coords = fetch_coordinates(os.getenv('YANDEX_GEO_API_KEY'), update.message.text)
     
-    if not (longitude and latitude):
+    if None in customer_coords:
         context.bot.send_message(
             update.effective_chat.id,
             dedent(
                 '''
-                Не могу распознать введенные координаты!
-                Необходим формат "22,22222 33,33333".
-                Либо просто отправьте нам геопозицию.
+                Не могу распознать этот адрес!
+                Вы можете просто отправить нам геопозицию.
                 '''
             )
         )
-    return 'WAITING_GEO'
+        return 'WAITING_GEO'
+    flow_meta = motlin_api.get_flow(flow_id=os.getenv('FLOW_ID'))
+    pizzerias = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
+    for pizzeria in pizzerias:
+        pizzeria.update({'distance': distance.distance(
+            customer_coords,
+            (pizzeria['longitude'], pizzeria['latitude'])
+        ).km})
+    pizzerias = sorted(pizzerias, key=lambda item: item['distance'])
+    nearest_pizzeria = pizzerias[0]
+    distance = int(nearest_pizzeria['distance'] * 1000)
+    if nearest_pizzeria['distance'] <= 0.5:
+        context.bot.send_message(
+            update.effective_chat.id,
+            text=dedent(
+                f'''
+                Может, заберете пиццу из нашей пиццерии неподалеку?
+                Она всего в {distance} метрах от вас!
+                Адрес: {nearest_pizzeria['address']}.
 
+                А можем и бесплатно доставить, нам не сложно!
+                '''
+            ),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(text='Оформить доставку', callback_data='delivery:0'),
+                InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+            ]])
+        )
+    elif nearest_pizzeria['distance'] <= 5:
+        context.bot.send_message(
+            update.effective_chat.id,
+            text=dedent(
+                f'''
+                Ваша пицца всего в {distance} метрах от вас!
+                Адрес: {nearest_pizzeria['address']}.
+                Стоимость доставки - 100 рублей.
+
+                Или можете забрать ваш заказ самостоятельно!
+                '''
+            ),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(text='Оформить доставку', callback_data='delivery:100'),
+                InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+            ]])
+        )
+    elif nearest_pizzeria['distance'] <= 20:
+        context.bot.send_message(
+            update.effective_chat.id,
+            text=dedent(
+                f'''
+                Ваша пицца всего в {distance} метрах от вас!
+                Адрес: {nearest_pizzeria['address']}.
+                Стоимость доставки - 200 рублей.
+
+                Или можете забрать ваш заказ самостоятельно!
+                '''
+            ),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(text='Оформить доставку', callback_data='delivery:200'),
+                InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+            ]])
+        )
+    else:
+        context.bot.send_message(
+            update.effective_chat.id,
+            text=dedent(
+                f'''
+                Вы можете забрать заказ по адресу:
+
+                {nearest_pizzeria['address']}
+                '''
+            ),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+            ]])
+        )
 
 def fetch_coordinates(apikey, address):
     base_url = "https://geocode-maps.yandex.ru/1.x"
@@ -420,8 +504,10 @@ if __name__ == '__main__':
                     MessageHandler(filters=Filters.text, callback=partial(enter_email, motlin_api))
                 ],
                 'WAITING_GEO': [
-                    MessageHandler(filters=Filters.all, callback=enter_location)
-                ]
+                    # CallbackQueryHandler(callback=partial(show_product, motlin_api), pattern='pickup'),
+                    MessageHandler(filters=Filters.all, callback=partial(enter_location, motlin_api))
+                ],
+
             },
             fallbacks=[
             ]
