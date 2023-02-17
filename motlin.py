@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import suppress
 from itertools import product
 import json
 
@@ -9,7 +10,7 @@ from datetime import datetime
 
 class Motlin:
     EXPIRED_SPARE_TIME = 300  # seconds
-
+    
     client_id = str()
     client_secret = str()
     
@@ -57,7 +58,8 @@ class Motlin:
     def _refresh_token_if_expired(func, **kwargs):
         def wrapper(self, **kwargs):
             if datetime.now().timestamp() + self.EXPIRED_SPARE_TIME > self.token_expired:
-                self.token, self.token_expired = self.get_token()
+                with suppress(requests.exceptions.HTTPError):
+                    self.token, self.token_expired = self.get_token()
             return func(self, **kwargs)
         return wrapper
 
@@ -449,20 +451,33 @@ class Motlin:
     def _create_or_refresh_cart(func, **kwargs):
         def wrapper(self, **kwargs):
             user_telegram_id = kwargs.get('user_telegram_id')
-            cart_id = self.redis.get(f'{user_telegram_id}:cart_id')
-            cart_expired = int(self.redis.get(f'{user_telegram_id}:cart_expired'))
+            cart_id = self.redis.get(f'{user_telegram_id}_cart_id')
+            cart_expired = self.redis.get(f'{user_telegram_id}_cart_expired')
+            print(f"Cart id: {cart_id}\nExpired at: {cart_expired}")
             if not (cart_id and cart_expired) or \
-                datetime.now().timestamp() + self.EXPIRED_SPARE_TIME > cart_expired:
+                datetime.now().timestamp() + self.EXPIRED_SPARE_TIME > int(cart_expired):
                 new_cart = self.create_cart()
 
                 expired_at = new_cart['data']['meta']['timestamps']['expires_at']
                 datetime_obj = datetime.fromisoformat(expired_at + '+03:00')
 
-                self.redis.set(f'{user_telegram_id}:cart_id', new_cart['data']['id'])
-                self.redis.set(f'{user_telegram_id}:cart_expired', int(datetime_obj.timestamp()))
-
+                self.redis.set(f'{user_telegram_id}_cart_id', new_cart['data']['id'])
+                self.redis.set(f'{user_telegram_id}_cart_expired', int(datetime_obj.timestamp()))
+                print(f"NEW\nCart id: {new_cart['data']['id']}\nExpired at: {int(datetime_obj.timestamp())}")
             return func(self, **kwargs)
         return wrapper
+
+
+    @_refresh_token_if_expired
+    def delete_cart(self, cart_id: str) -> None:
+        url = f'https://api.moltin.com/v2/carts/{cart_id}'
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+        }
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
+        print(f'Delete cart: {response}')
+
 
     @_refresh_token_if_expired
     @_create_or_refresh_cart
@@ -470,7 +485,7 @@ class Motlin:
                             user_telegram_id: int,
                             product_id: str,
                             quantity: int):
-        cart_id = self.redis.get(f'{user_telegram_id}:cart_id')
+        cart_id = self.redis.get(f'{user_telegram_id}_cart_id')
         url = f'https://api.moltin.com/v2/carts/{cart_id}/items'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -491,7 +506,7 @@ class Motlin:
     @_create_or_refresh_cart
     def get_cart(self,
                  user_telegram_id: int) -> dict:
-        cart_id = self.redis.get(f'{user_telegram_id}:cart_id')
+        cart_id = self.redis.get(f'{user_telegram_id}_cart_id')
         url = f'https://api.moltin.com/v2/carts/{cart_id}'
         headers = {
             "Authorization": f"Bearer {self.token}"
@@ -508,7 +523,7 @@ class Motlin:
     def remove_product_from_cart(self,
                                  user_telegram_id: int,
                                  item_id: str) -> dict:
-        cart_id = self.redis.get(f'{user_telegram_id}:cart_id')
+        cart_id = self.redis.get(f'{user_telegram_id}_cart_id')
         url = f'https://api.moltin.com/v2/carts/{cart_id}/items/{item_id}'
         headers = {
             "Authorization": f"Bearer {self.token}"
@@ -520,7 +535,8 @@ class Motlin:
     @_refresh_token_if_expired
     def create_customer(self,
                         name: str,
-                        email: str) -> dict:
+                        email: str,
+                        user_telegram_id: int) -> dict:
         url = 'https://api.moltin.com/v2/customers'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -533,5 +549,37 @@ class Motlin:
             }
         }
         response = requests.post(url, headers=headers, json=post_data)
+        response.raise_for_status()
+        response_meta = response.json()
+        self.redis.set(f'{user_telegram_id}_customer_id', response_meta['data']['id'])
+        return response_meta
+    
+    @_refresh_token_if_expired
+    def update_customer_address(self,
+                                customer_id: str,
+                                longitude: float,
+                                latitude: float) -> dict:
+        url = f'https://api.moltin.com/v2/customers/{customer_id}'
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+        }
+        put_data = {
+            "data": {
+                "type": "customer",
+                "longitude": longitude,
+                "latitude": latitude
+            }
+        }
+        response = requests.put(url, headers=headers, json=put_data)
+        response.raise_for_status()
+        return response.json()
+    
+    @_refresh_token_if_expired
+    def get_customer(self, customer_id: str) -> dict:
+        url = f'https://api.moltin.com/v2/customers/{customer_id}'
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+        }
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         return response.json()

@@ -2,9 +2,7 @@ import json
 import os
 import re
 
-from datetime import datetime
 from functools import partial
-from urllib import request
 from environs import Env
 from textwrap import dedent
 
@@ -104,11 +102,6 @@ def display_products(motlin_api: Motlin,
             right_border=PRODUCTS_PER_MESSAGE
         )
     )
-    if update.callback_query:
-        context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=update.callback_query.message.message_id,
-        )
     return 'HANDLE_MENU'
 
 
@@ -137,21 +130,25 @@ def show_product(motlin_api: Motlin,
                  context: CallbackContext) -> str:
     _, product_id = re.split(r':', update.callback_query.data)
     product = motlin_api.get_product(product_id=product_id)
+    
     pricebook = motlin_api.get_pricebook(pricebook_id=os.getenv('PRICEBOOK_ID'))
-    with open('pricebook.json', 'w') as pb:
-        json.dump(pricebook, pb, indent=4, ensure_ascii=True)
-    main_image_url = product['included']['main_images'][0]['link']['href']
-    print(json.dumps(pricebook, indent=4))
     price = [
         price['attributes']['currencies']['RUB']['amount']
         for price in pricebook["included"]
         if price['attributes']['sku'] == product['data']['attributes']['sku']
     ][0]
+    
+    main_image_url = product['included']['main_images'][0]['link']['href']
     image_response = requests.get(main_image_url)
     if image_response.ok:
         photo=image_response.content
     else:
         photo=open(os.getenv('LOGO_IMAGE'), 'rb')
+    
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=update.callback_query.message.message_id,
+    )
     context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=photo,
@@ -163,10 +160,6 @@ def show_product(motlin_api: Motlin,
             """
         ),
         reply_markup=make_prod_inline(product_id=product_id)
-    )
-    context.bot.delete_message(
-        chat_id=update.effective_chat.id,
-        message_id=update.callback_query.message.message_id,
     )
     return 'HANDLE_DESCRIPTION'
 
@@ -234,8 +227,11 @@ def add_to_cart(motlin_api: Motlin,
 
 def show_cart(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
     user_cart = motlin_api.get_cart(user_telegram_id=update.effective_chat.id)
-    #print(json.dumps(user_cart, indent=4))
-    if not user_cart['included']['items']:
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=update.callback_query.message.message_id,
+    )
+    if 'included' not in user_cart or not user_cart['included']['items']:
         context.bot.send_message(
             update.effective_chat.id,
             'Ваша корзина пуста'
@@ -279,10 +275,6 @@ def show_cart(motlin_api: Motlin, update: Update, context: CallbackContext) -> s
         cart_message,
         reply_markup=InlineKeyboardMarkup(keyboard_buttons)
     )
-    context.bot.delete_message(
-        chat_id=update.effective_chat.id,
-        message_id=update.callback_query.message.message_id,
-    )
     return 'HANDLE_DESCRIPTION'
 
 
@@ -305,6 +297,7 @@ def remove_from_cart(motlin_api: Motlin,
 
 
 def make_order(update: Update, context: CallbackContext) -> str:
+
     context.bot.send_document(
         chat_id=update.effective_chat.id,
         document=open('privacy_policy.pdf', 'rb'),
@@ -329,10 +322,12 @@ def enter_email(motlin_api: Motlin, update: Update, context: CallbackContext) ->
     try:
         customer = motlin_api.create_customer(
             name=update.effective_chat.first_name or \
-                update.effective_chat.username or \
-                    str(update.effective_chat.id),
-            email=update.message.text
+                 update.effective_chat.username or \
+                 str(update.effective_chat.id),
+            email=update.message.text,
+            user_telegram_id=update.effective_chat.id
         )
+        motlin_api.redis.set(f"{update.effective_chat.id}_customer_id", customer['data']['id'])
     except requests.exceptions.HTTPError as error:
         if error.response.status_code == CUSTOMER_ALREADY_EXISTS_ERROR_CODE:
             pass
@@ -342,16 +337,10 @@ def enter_email(motlin_api: Motlin, update: Update, context: CallbackContext) ->
             '''
             Ваш заказ оформлен!
             Займемся вопросом доставки.
-            Введите адрес доставки, координаты или отправьте свою геопозицию.
-            Либо нажмите "заберу сам" если нужен самовывоз
+            Введите адрес доставки, ваши координаты или отправьте свою геопозицию.
             '''
         ),
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
-        ]])
     )
-    motlin_api.redis.delete(f'{update.effective_chat.id}_cart_id')
-    motlin_api.redis.delete(f'{update.effective_chat.id}_cart_expires')
     return 'WAITING_GEO'
 
 
@@ -375,9 +364,16 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
             )
         )
         return 'WAITING_GEO'
-    flow_meta = motlin_api.get_flow(flow_id=os.getenv('FLOW_ID'))
+    motlin_api.update_customer_address(
+        customer_id=motlin_api.redis.get(f"{update.effective_chat.id}_customer_id"),
+        longitude=customer_coords[0],
+        latitude=customer_coords[1]
+    )
+    motlin_api.redis.set(f'{update.effective_chat.id}_cordinates', ':'.join(map(str, customer_coords)))
+
+    flow_meta = motlin_api.get_flow(flow_id=os.getenv('PIZZERIAS_FLOW_ID'))
     pizzerias = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
-    
+
     for pizzeria in pizzerias:
         pizzeria.update({'distance': geopy_distance.distance(
             customer_coords,
@@ -385,6 +381,15 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
         ).km})
     pizzerias = sorted(pizzerias, key=lambda item: item['distance'])
     nearest_pizzeria = pizzerias[0]
+    motlin_api.redis.set(
+        f'{update.effective_chat.id}_nearest_pizzeria_id',
+        f'{nearest_pizzeria["id"]}'
+    )
+    motlin_api.redis.set(
+        f'pizerria_{nearest_pizzeria["id"]}_admin_id',
+        nearest_pizzeria['admin_tg_id']
+    )
+
     distance = int(nearest_pizzeria['distance'] * 1000)
     if nearest_pizzeria['distance'] <= 0.5:
         context.bot.send_message(
@@ -448,9 +453,11 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
                 '''
             ),
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(text='Заберу сам.', callback_data='pickup')
+                InlineKeyboardButton(text='Вернуться в меню', callback_data='back_to_store')
             ]])
         )
+        return pickup(motlin_api, update, context)
+    return 'DELIVERY'
 
 def fetch_coordinates(apikey, address):
     base_url = "https://geocode-maps.yandex.ru/1.x"
@@ -468,6 +475,64 @@ def fetch_coordinates(apikey, address):
     most_relevant = found_places[0]
     lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
     return lon, lat
+
+def delete_cart(motlin_api: Motlin, update: Update, context: CallbackContext) -> None:
+    cart_id = motlin_api.redis.get(f'{update.effective_chat.id}_cart_id')
+    motlin_api.delete_cart(cart_id=cart_id)
+    motlin_api.redis.delete(f'{update.effective_chat.id}_cart_id')
+
+
+def pickup(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
+    context.bot.send_message(
+        update.effective_chat.id,
+        text='Спасибо за заказ! Мы вас ждем!'
+    )
+    update.callback_query = None
+    delete_cart(motlin_api=motlin_api, update=update, context=context)
+    return display_products(motlin_api, update, context)
+
+def delivery(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
+    customer_id = motlin_api.redis.get(f"{update.effective_chat.id}_customer_id")
+    customer_meta = motlin_api.get_customer(customer_id=customer_id)
+
+    nearest_pizerria_id = motlin_api.redis.get(f'{update.effective_chat.id}_nearest_pizzeria_id')
+    admin_tg_id = int(motlin_api.redis.get(f'pizerria_{nearest_pizerria_id}_admin_id'))
+    user_cart = motlin_api.get_cart(user_telegram_id=update.effective_chat.id)
+
+    if 'included' not in user_cart or not user_cart['included']['items']:
+        # it can be if with any reason delivery button was pressed after cart was expired, for example
+        context.bot.send_message(
+            update.effective_chat.id,
+            'Ваша корзина пуста'
+        )
+        return display_products(motlin_api, update, context)
+    
+    cart_message = dedent(
+        """
+        Новый заказ:
+        """
+    )
+    for item in user_cart['included']['items']:
+        cart_message += dedent(
+            f"""
+            {item['name']} ({item['quantity']} шт.)
+            """
+        )
+    context.bot.send_message(
+        chat_id=admin_tg_id,
+        text=cart_message
+    )
+    context.bot.send_location(
+        chat_id=admin_tg_id,
+        longitude=customer_meta['data']['longitude'],
+        latitude=customer_meta['data']['latitude']
+    )
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Ваш заказ передан в доставку'
+    )
+    delete_cart(motlin_api=motlin_api, update=update, context=context)
+    return display_products(motlin_api, update, context)
 
 
 if __name__ == '__main__':
@@ -505,10 +570,14 @@ if __name__ == '__main__':
                     MessageHandler(filters=Filters.text, callback=partial(enter_email, motlin_api))
                 ],
                 'WAITING_GEO': [
-                    # CallbackQueryHandler(callback=partial(show_product, motlin_api), pattern='pickup'),
-                    MessageHandler(filters=Filters.all, callback=partial(enter_location, motlin_api))
+                    MessageHandler(filters=Filters.all, callback=partial(enter_location, motlin_api)),
+                    CallbackQueryHandler(callback=partial(pickup, motlin_api), pattern='pickup'),
                 ],
-
+                'DELIVERY': [
+                    CallbackQueryHandler(callback=partial(display_products, motlin_api), pattern='back_to_store'),
+                    CallbackQueryHandler(callback=partial(pickup, motlin_api), pattern='pickup'),
+                    CallbackQueryHandler(callback=partial(delivery, motlin_api), pattern='delivery'),
+                ]
             },
             fallbacks=[
             ]

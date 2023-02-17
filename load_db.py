@@ -321,7 +321,7 @@ if __name__ == '__main__':
         new_field_name = args.new_field_name
         default_value = args.default_value
         new_field_type = args.new_field_type
-        flow_id = os.getenv('FLOW_ID') or args.flow_id
+        flow_id = os.getenv('PIZZERIAS_FLOW_ID') or args.flow_id
         
         if not (new_field_name and new_field_type and default_value and flow_id):
             sys.stdout.write('Enter new field params a!\n')
@@ -340,9 +340,8 @@ if __name__ == '__main__':
             )
         except requests.exceptions.HTTPError as error:
             pass
-        flow_meta = motlin_api.get_flow(flow_id=os.getenv('FLOW_ID'))
+        flow_meta = motlin_api.get_flow(flow_id=os.getenv('PIZZERIAS_FLOW_ID'))
         entries = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
-        assert flow_id == 'a201aae8-5e06-41fc-a001-d72f6aac0cc9'
         for entry in tqdm(entries, desc='adding field value'):
             try:
                 motlin_api.update_entry(
