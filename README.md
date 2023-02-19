@@ -1,8 +1,7 @@
 # Интернет-магазин для сети пиццерий.
 Frontend - [Telegram](https://docs.python-telegram-bot.org/en/stable/)
 Backend (with admin) - [ElasticPath](https://euwest.cm.elasticpath.com/)
-
-![bot_demo](https://github.com/ilyashirko/pizza-shop/tree/master/readme_media/bot_demo.gif)
+<img src="readme_media/bot_demo.gif" width="300">
 
 ## Установка и настройка
 Для распаковки проекта понадобится python (3.10.6) и poetry (1.2.0)
@@ -16,7 +15,7 @@ mv .env.example .env
 ```
 Необходимо зарегистрироваться в [ElasticPath](https://euwest.cm.elasticpath.com/).  
 Если вы все сделали правильно вы получите доступ в ЛК:  
-![elastic_main](https://github.com/ilyashirko/pizza-shop/tree/master/readme_media/elastic_main.png)
+![elastic_main](readme_media/elastic_main.png)
 
 #### Формируем .env файл
 `STORE_ID`, `CLIENT_SECRET` и `CLIENT_ID` получаем в [настройках ElasticPath](https://euwest.cm.elasticpath.com/application-keys).  
@@ -34,10 +33,10 @@ ID необходимых для работы разделов вашего ре
 
 #### Настраиваем магазин в ElasticPath
 1. Необходимо настроить валюту. В программе используются рубли РФ.
-![elastic_currency](https://github.com/ilyashirko/pizza-shop/tree/master/readme_media/elastic_currency.png)
+![elastic_currency](readme_media/elastic_currency.png)
 
 2. Необходимо добавить flow `customers` и добавить туда `longitude` и `latitude`. Поскольку это встроеный flow, после создания, в разделе Flows перед моделью Customers будет иконка `Core`.
-![elastic_customers](https://github.com/ilyashirko/pizza-shop/tree/master/readme_media/elastic_customers.png)
+![elastic_customers](readme_media/elastic_customers.png)
 
 #### Завершаем настройку
 1. Необходимо добавить файл `privacy_policy.pdf` в корень проекта, в файле должна быть политика конфиденциальности для приема персональных данных у пользователей.  
