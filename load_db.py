@@ -321,7 +321,7 @@ if __name__ == '__main__':
         new_field_name = args.new_field_name
         default_value = args.default_value
         new_field_type = args.new_field_type
-        flow_id = os.getenv('PIZZERIAS_FLOW_ID') or args.flow_id
+        flow_id = os.getenv('PIZZERIAS_FLOW_ID', None) or args.flow_id
         
         if not (new_field_name and new_field_type and default_value and flow_id):
             sys.stdout.write('Enter new field params a!\n')

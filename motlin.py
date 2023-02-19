@@ -388,7 +388,6 @@ class Motlin:
         }
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        #input(json.dumps(response.json(), indent=4))
         return response.json()
 
     @_refresh_token_if_expired

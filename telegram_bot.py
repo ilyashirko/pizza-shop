@@ -32,10 +32,10 @@ PRODUCTS_PER_MESSAGE = 10
 CUSTOMER_ALREADY_EXISTS_ERROR_CODE = 409
 
 
-def make_inline_products(motlin_api: Motlin,
+def make_products_inline(motlin_api: Motlin,
                          items_in_row: int = 2,
                          left_border: int = 0,
-                         right_border: int = PRODUCTS_PER_MESSAGE):
+                         right_border: int = PRODUCTS_PER_MESSAGE) -> InlineKeyboardMarkup:
     assert left_border >= 0
     assert right_border >= 0
     products = motlin_api.get_products_in_release(
@@ -49,7 +49,6 @@ def make_inline_products(motlin_api: Motlin,
         chunked_products = list(chunked(products[:PRODUCTS_PER_MESSAGE], items_in_row))
     buttons = [
         [
-            
             InlineKeyboardButton(
                 text=product['attributes']['name'],
                 callback_data=f'product:{product["id"]}'
@@ -75,7 +74,7 @@ def make_inline_products(motlin_api: Motlin,
     return InlineKeyboardMarkup(buttons)
 
 
-def make_prod_inline(product_id: str, quantity: int = 1):
+def make_current_product_inline(product_id: str, quantity: int = 1) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
@@ -96,7 +95,7 @@ def display_products(motlin_api: Motlin,
     context.bot.send_message(
         update.effective_chat.id,
         'Выберите пиццу',
-        reply_markup=make_inline_products(
+        reply_markup=make_products_inline(
             motlin_api=motlin_api,
             left_border=0,
             right_border=PRODUCTS_PER_MESSAGE
@@ -113,7 +112,7 @@ def display_other_products(motlin_api: Motlin,
     context.bot.send_message(
         update.effective_chat.id,
         'Выберите пиццу',
-        reply_markup=make_inline_products(
+        reply_markup=make_products_inline(
             motlin_api=motlin_api,
             left_border=left_border,
             right_border=right_border
@@ -124,6 +123,7 @@ def display_other_products(motlin_api: Motlin,
         message_id=update.callback_query.message.message_id,
     )
     return 'HANDLE_MENU'
+
 
 def show_product(motlin_api: Motlin,
                  update: Update,
@@ -159,7 +159,7 @@ def show_product(motlin_api: Motlin,
             {price} RUB
             """
         ),
-        reply_markup=make_prod_inline(product_id=product_id)
+        reply_markup=make_current_product_inline(product_id=product_id)
     )
     return 'HANDLE_DESCRIPTION'
 
@@ -171,7 +171,7 @@ def increase_quantity(update: Update,
     context.bot.edit_message_reply_markup(
         chat_id=update.effective_chat.id,
         message_id=update.callback_query.message.message_id,
-        reply_markup=make_prod_inline(product_id=product_id, quantity=(current_quantity + 1))
+        reply_markup=make_current_product_inline(product_id=product_id, quantity=(current_quantity + 1))
     )
     return 'HANDLE_DESCRIPTION'
 
@@ -184,7 +184,7 @@ def reduce_quantity(update: Update,
         context.bot.edit_message_reply_markup(
             chat_id=update.effective_chat.id,
             message_id=update.callback_query.message.message_id,
-            reply_markup=make_prod_inline(product_id=product_id, quantity=(current_quantity - 1))
+            reply_markup=make_current_product_inline(product_id=product_id, quantity=(current_quantity - 1))
         )
     return 'HANDLE_DESCRIPTION'
 
