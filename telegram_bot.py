@@ -22,12 +22,16 @@ from telegram.ext import (
     MessageHandler,
     CallbackContext,
     CallbackQueryHandler,
-    ConversationHandler, Filters
+    ConversationHandler,
+    Filters,
 )
+from telegram.ext.jobqueue import JobQueue
 
 from motlin import Motlin
 
 PRODUCTS_PER_MESSAGE = 10
+
+ONE_HOUR = 60 * 60
 
 CUSTOMER_ALREADY_EXISTS_ERROR_CODE = 409
 
@@ -534,6 +538,43 @@ def delivery(motlin_api: Motlin, update: Update, context: CallbackContext) -> st
     delete_cart(motlin_api=motlin_api, update=update, context=context)
     return display_products(motlin_api, update, context)
 
+def scheduled_message(callback: CallbackContext):
+    message_meta = json.loads(callback.job.context)
+    inline_components = message_meta.get('inline_reply_markup')
+    inline_keyboard = None
+    if inline_components and inline_components[0]:
+        inline_keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        text=button['text'],
+                        callback_data=button['callback_data']
+                    )
+                    for button in line
+                ]
+                for line in inline_components
+            ]
+        )
+    callback.bot.send_message(
+        chat_id=message_meta.get('chat_id'),
+        text=message_meta.get('text'),
+        reply_markup=inline_keyboard
+    )
+
+
+def launch_timer(job_queue: JobQueue, update: Update, context: CallbackContext):
+    print(type(job_queue))
+    context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text='Setting a timer for 1 minute!')
+    message_meta = {
+        "chat_id": update.effective_chat.id,
+        "text": 'Минута прошла',
+        "inline_reply_markup": None
+    }
+    job_queue.run_once(scheduled_message, 5, context=json.dumps(message_meta, ensure_ascii=False))
+    return display_products(motlin_api, update, context)
+
 
 if __name__ == '__main__':
     env = Env()
@@ -545,10 +586,11 @@ if __name__ == '__main__':
     )
     
     updater = Updater(token=env.str('TELEGRAM_BOT_TOKEN'), use_context=True)
-
+    job_queue = updater.job_queue
     updater.dispatcher.add_handler(
         ConversationHandler(
             entry_points = [
+                CommandHandler('start', partial(launch_timer, job_queue), pass_job_queue=True),
                 CommandHandler('start', partial(display_products, motlin_api))
             ],
             states = {
