@@ -2,11 +2,11 @@ import json
 import os
 import re
 
-from functools import partial
-from environs import Env
-from textwrap import dedent
 from contextlib import suppress
+from environs import Env
+from functools import partial
 from more_itertools import chunked
+from textwrap import dedent
 
 import requests
 
@@ -356,6 +356,8 @@ def enter_email(motlin_api: Motlin, update: Update, context: CallbackContext) ->
     return 'WAITING_GEO'
 
 
+def 
+
 def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
     if update.message.location:
         customer_coords = update.message.location.longitude, update.message.location.latitude
@@ -493,7 +495,6 @@ def delete_cart(motlin_api: Motlin, update: Update, context: CallbackContext) ->
     motlin_api.redis.delete(f'{update.effective_chat.id}_cart_id')
 
 
-
 @delete_prev_message
 def make_payment(motlin_api: Motlin,
                  update: Update,
@@ -534,7 +535,6 @@ def delivery(motlin_api: Motlin, job_queue: JobQueue, update: Update, context: C
 
 @delete_prev_message
 def finish_order(job_queue: JobQueue, update: Update, context: CallbackContext):
-    print('finish_order')
     customer_id = motlin_api.redis.get(f"{update.effective_chat.id}_customer_id")
     customer_meta = motlin_api.get_customer(customer_id=customer_id)
     is_delivery = bool(int(motlin_api.redis.get(f"{update.message.successful_payment.invoice_payload}_is_delivery")))
@@ -594,7 +594,6 @@ def finish_order(job_queue: JobQueue, update: Update, context: CallbackContext):
     return display_products(motlin_api, update, context)
 
 
-
 def scheduled_message(context: CallbackContext):
     message_meta = json.loads(context.job.context)
     inline_components = message_meta.get('inline_reply_markup')
@@ -617,20 +616,6 @@ def scheduled_message(context: CallbackContext):
         text=message_meta.get('text'),
         reply_markup=inline_keyboard
     )
-
-
-def launch_timer(job_queue: JobQueue, update: Update, context: CallbackContext):
-    print(type(job_queue))
-    context.bot.send_message(
-        chat_id=update.message.chat_id,
-        text='Setting a timer for 1 minute!')
-    message_meta = {
-        "chat_id": update.effective_chat.id,
-        "text": 'Минута прошла',
-        "inline_reply_markup": None
-    }
-    job_queue.run_once(scheduled_message, 5, context=json.dumps(message_meta, ensure_ascii=False))
-    return display_products(motlin_api, update, context)
 
 
 if __name__ == '__main__':
@@ -671,7 +656,6 @@ if __name__ == '__main__':
                 ],
                 'WAITING_GEO': [
                     MessageHandler(filters=Filters.all, callback=partial(enter_location, motlin_api)),
-                    # CallbackQueryHandler(callback=partial(pickup, motlin_api), pattern='pickup'),
                 ],
                 'DELIVERY': [
                     CallbackQueryHandler(callback=partial(display_products, motlin_api), pattern='back_to_store'),

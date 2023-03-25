@@ -466,7 +466,6 @@ class Motlin:
             user_telegram_id = kwargs.get('user_telegram_id')
             cart_id = self.redis.get(f'{user_telegram_id}_cart_id')
             cart_expired = self.redis.get(f'{user_telegram_id}_cart_expired')
-            print(f"Cart id: {cart_id}\nExpired at: {cart_expired}")
             if not (cart_id and cart_expired) or \
                 datetime.now().timestamp() + self.EXPIRED_SPARE_TIME > int(cart_expired):
                 new_cart = self.create_cart()
@@ -476,10 +475,8 @@ class Motlin:
 
                 self.redis.set(f'{user_telegram_id}_cart_id', new_cart['data']['id'])
                 self.redis.set(f'{user_telegram_id}_cart_expired', int(datetime_obj.timestamp()))
-                print(f"NEW\nCart id: {new_cart['data']['id']}\nExpired at: {int(datetime_obj.timestamp())}")
             return func(self, **kwargs)
         return wrapper
-
 
     @_refresh_token_if_expired
     def delete_cart(self, cart_id: str) -> None:
@@ -489,8 +486,6 @@ class Motlin:
         }
         response = requests.delete(url, headers=headers)
         response.raise_for_status()
-        print(f'Delete cart: {response}')
-
 
     @_refresh_token_if_expired
     @_create_or_refresh_cart
