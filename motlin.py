@@ -320,7 +320,21 @@ class Motlin:
             else:
                 url = entries_meta['links']['next']
         return entries
-        
+    
+
+    @_refresh_token_if_expired
+    def get_entry(self,
+                     flow_slug: str,
+                     entry_id: str) -> dict:
+        url = f'https://api.moltin.com/v2/flows/{flow_slug}/entries/{entry_id}'
+        headers = {
+            "Authorization": f"Bearer {self.token}"
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    
+
     @_refresh_token_if_expired
     def create_entry(self,
                      flow_slug: str,

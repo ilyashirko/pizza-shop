@@ -1,6 +1,6 @@
 # Интернет-магазин для сети пиццерий.
-Frontend - [Telegram](https://docs.python-telegram-bot.org/en/stable/)
-Backend (with admin) - [ElasticPath](https://euwest.cm.elasticpath.com/)
+Frontend - [Telegram](https://docs.python-telegram-bot.org/en/stable/)  
+Backend (with admin) - [ElasticPath](https://euwest.cm.elasticpath.com/)  
 <img src="readme_media/bot_demo.gif" width="300">
 
 ## Установка и настройка
@@ -21,6 +21,8 @@ mv .env.example .env
 `STORE_ID`, `CLIENT_SECRET` и `CLIENT_ID` получаем в [настройках ElasticPath](https://euwest.cm.elasticpath.com/application-keys).  
 
 `TELEGRAM_BOT_TOKEN` получаем при регистрации бота для нашего магазина в [BotFather](https://t.me/botfather).  
+
+`YOOKASSA_TOKEN` получаем также в [BotFather](https://t.me/botfather) в разделе `/mybots` -> `НЕОБХОДИМЫЙ БОТ` -> `Payments`.  
 
 `YANDEX_GEO_API_KEY` получаем в [кабинете разработчика яндекс](https://developer.tech.yandex.ru/services/).  
 
