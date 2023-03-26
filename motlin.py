@@ -1,7 +1,6 @@
 from __future__ import annotations
 from contextlib import suppress
-from itertools import product
-import json
+import os
 
 import requests
 from redis import Redis
@@ -14,6 +13,12 @@ class Motlin:
     client_id = str()
     client_secret = str()
     
+    catalog_id = os.getenv("CATALOG_ID")
+    node_id = os.getenv('NODE_ID')
+    pricebook_id = os.getenv('PRICEBOOK_ID')
+    flow_id=os.getenv('PIZZERIAS_FLOW_ID')
+
+
     token = str()
     token_expired = str()
 
@@ -224,7 +229,7 @@ class Motlin:
         response.raise_for_status()
 
     @_refresh_token_if_expired
-    def get_flow(self, flow_id: str) -> dict:
+    def get_flow(self, flow_id: str = flow_id) -> dict:
         url = f'https://api.moltin.com/v2/flows/{flow_id}'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -393,8 +398,8 @@ class Motlin:
     
     @_refresh_token_if_expired
     def get_products_in_release(self,
-                                catalog_id: str,
-                                node_id: str,
+                                catalog_id: str = catalog_id,
+                                node_id: str = node_id,
                                 release_id: str = 'latest') -> dict:
         url = f'https://api.moltin.com/pcm/catalogs/{catalog_id}/releases/{release_id}/nodes/{node_id}/relationships/products'
         headers = {
@@ -405,7 +410,7 @@ class Motlin:
         return response.json()
 
     @_refresh_token_if_expired
-    def get_pricebook(self, pricebook_id: str, include_prices: bool = True) -> dict:
+    def get_pricebook(self, pricebook_id: str = pricebook_id, include_prices: bool = True) -> dict:
         url = f'https://api.moltin.com/pcm/pricebooks/{pricebook_id}'
         headers = {
             "Authorization": f"Bearer {self.token}"
