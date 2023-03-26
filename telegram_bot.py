@@ -1,5 +1,6 @@
 import json
 import os
+from platform import node
 import re
 
 from contextlib import suppress
@@ -64,10 +65,7 @@ def make_products_inline(motlin_api: Motlin,
                          right_border: int = PRODUCTS_PER_MESSAGE) -> InlineKeyboardMarkup:
     assert left_border >= 0
     assert right_border >= 0
-    products = motlin_api.get_products_in_release(
-        catalog_id=os.getenv("CATALOG_ID"),
-        node_id=os.getenv('NODE_ID')
-    )['data']
+    products = motlin_api.get_products_in_release()['data']
     chunked_products = list(chunked(products[left_border:right_border], items_in_row))
     if not chunked_products:
         # perhaps DB was refactored / became shorter or something else.
@@ -156,7 +154,7 @@ def show_product(motlin_api: Motlin,
     _, product_id = re.split(r':', update.callback_query.data)
     product = motlin_api.get_product(product_id=product_id)
     
-    pricebook = motlin_api.get_pricebook(pricebook_id=os.getenv('PRICEBOOK_ID'))
+    pricebook = motlin_api.get_pricebook()
     price = [
         price['attributes']['currencies']['RUB']['amount']
         for price in pricebook["included"]
@@ -384,7 +382,7 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
     )
     motlin_api.redis.set(f'{update.effective_chat.id}_cordinates', ':'.join(map(str, customer_coords)))
 
-    flow_meta = motlin_api.get_flow(flow_id=os.getenv('PIZZERIAS_FLOW_ID'))
+    flow_meta = motlin_api.get_flow()
     pizzerias = motlin_api.get_entries(flow_slug=flow_meta['data']['slug'])
 
     for pizzeria in pizzerias:
@@ -578,7 +576,7 @@ def finish_order(job_queue: JobQueue, update: Update, context: CallbackContext):
         }
         job_queue.run_once(scheduled_message, 5, context=json.dumps(message_meta, ensure_ascii=False))
     else:
-        flow_meta = motlin_api.get_flow(flow_id=os.getenv('PIZZERIAS_FLOW_ID'))
+        flow_meta = motlin_api.get_flow()
         nearest_pizzeria_meta = motlin_api.get_entry(flow_slug=flow_meta['data']['slug'], entry_id=nearest_pizerria_id)
         context.bot.send_message(
             update.effective_chat.id,
