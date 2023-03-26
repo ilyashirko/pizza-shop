@@ -41,6 +41,7 @@ CUSTOMER_ALREADY_EXISTS_ERROR_CODE = 409
 
 def delete_prev_message(func, *args, **kwargs):
     def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
         try:
             update, context = args[-2:]
         except ValueError:
@@ -53,7 +54,7 @@ def delete_prev_message(func, *args, **kwargs):
                     chat_id=update.effective_chat.id,
                     message_id=update.callback_query.message.message_id,
                 )
-        return func(*args, **kwargs)
+        return result
     return wrapper
 
 
@@ -356,8 +357,6 @@ def enter_email(motlin_api: Motlin, update: Update, context: CallbackContext) ->
     return 'WAITING_GEO'
 
 
-def 
-
 def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext) -> str:
     if update.message.location:
         customer_coords = update.message.location.longitude, update.message.location.latitude
@@ -636,8 +635,6 @@ if __name__ == '__main__':
             ],
             states = {
                 'HANDLE_MENU': [
-                    CommandHandler('test', partial(launch_timer, job_queue), pass_job_queue=True),
-                    CommandHandler('test', make_payment, pass_job_queue=True),
                     CallbackQueryHandler(callback=partial(show_product, motlin_api), pattern='product'),
                     CallbackQueryHandler(callback=partial(display_other_products, motlin_api), pattern='other_products'),
                     CallbackQueryHandler(callback=partial(show_cart, motlin_api), pattern='show_cart'),
