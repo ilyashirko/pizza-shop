@@ -1,6 +1,5 @@
 import json
 import os
-from platform import node
 import re
 
 from contextlib import suppress
@@ -31,6 +30,7 @@ from telegram.ext import (
 )
 from telegram.ext.jobqueue import JobQueue
 
+from geo_processing import fetch_coordinates
 from motlin import Motlin
 
 PRODUCTS_PER_MESSAGE = 10
@@ -466,24 +466,6 @@ def enter_location(motlin_api: Motlin, update: Update, context: CallbackContext)
         )
         return make_payment(motlin_api, update, context)
     return 'DELIVERY'
-
-
-def fetch_coordinates(apikey, address):
-    base_url = "https://geocode-maps.yandex.ru/1.x"
-    response = requests.get(base_url, params={
-        "geocode": address,
-        "apikey": apikey,
-        "format": "json",
-    })
-    response.raise_for_status()
-    found_places = response.json()['response']['GeoObjectCollection']['featureMember']
-
-    if not found_places:
-        return None, None
-
-    most_relevant = found_places[0]
-    lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
-    return lon, lat
 
 
 def delete_cart(motlin_api: Motlin, update: Update, context: CallbackContext) -> None:
