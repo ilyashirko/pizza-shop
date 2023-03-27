@@ -603,7 +603,11 @@ if __name__ == '__main__':
 
     motlin_api = Motlin(
         env.str('CLIENT_ID'),
-        env.str('CLIENT_SECRET')
+        env.str('CLIENT_SECRET'),
+        env.str('CATALOG_ID'),
+        env.str('NODE_ID'),
+        env.str('PRICEBOOK_ID'),
+        env.str('PIZZERIAS_FLOW_ID'),
     )
     
     updater = Updater(token=env.str('TELEGRAM_BOT_TOKEN'), use_context=True)
