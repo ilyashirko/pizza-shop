@@ -12,21 +12,24 @@ class Motlin:
     
     client_id = str()
     client_secret = str()
-    
-    catalog_id = os.getenv("CATALOG_ID")
-    node_id = os.getenv('NODE_ID')
-    pricebook_id = os.getenv('PRICEBOOK_ID')
-    flow_id=os.getenv('PIZZERIAS_FLOW_ID')
-
 
     token = str()
     token_expired = str()
 
+    catalog_id = None
+    node_id = None
+    pricebook_id = None
+    flow_id = None
+    
     products = list()
 
     def __init__(self,
                  client_id: str,
                  client_secret: str,
+                 catalog_id: str = os.getenv("CATALOG_ID"),
+                 node_id: str = os.getenv('NODE_ID'),
+                 pricebook_id: str = os.getenv('PRICEBOOK_ID'),
+                 flow_id: str = os.getenv('PIZZERIAS_FLOW_ID'),
                  redis_host: str = 'localhost',
                  redis_port: int = 6379,
                  redis_password: str = None,
@@ -45,6 +48,10 @@ class Motlin:
             client_id=client_id,
             client_secret=client_secret
         )
+        self.catalog_id = catalog_id
+        self.node_id = node_id
+        self.pricebook_id = pricebook_id
+        self.flow_id = flow_id
 
     def get_token(self,
                   client_id: str = client_id,
